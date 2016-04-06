@@ -1,6 +1,6 @@
 # web-dev-dist-sys
 
-FIXME: Write a one-line description of your library/project.
+This is a series of slide images as well as a web server and browser client for Clojure/West 2016.
 
 ## Overview
 
@@ -34,6 +34,6 @@ get live reloading, nor a REPL.
 
 ## License
 
-Copyright © 2014 FIXME
+Copyright © 2016 Mikaela Patella
 
 Distributed under the Eclipse Public License either version 1.0 or (at your option) any later version.
