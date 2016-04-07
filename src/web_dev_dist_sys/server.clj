@@ -39,6 +39,8 @@
   (def connected-uids                connected-uids) ; Watchable, read-only atom
   )
 
+(def index (atom 1))
+
 (defn landing-pg-handler [ring-req]
   (hiccup/html
    [:div#app] ;; Figwheel mount point
@@ -76,7 +78,18 @@
   [{:as ev-msg :keys [event id ring-req]}]
   (let [session (:session ring-req)
         uid (:uid session)]
-    (debugf "Next: %s event from %s" event uid)))
+    (do
+      (debugf "Next: %s event from %s" event uid)
+      (swap! index inc))))
+
+(defmethod -event-msg-handler
+  :cli/prev
+  [{:as ev-msg :keys [event id ring-req]}]
+  (let [session (:session ring-req)
+        uid (:uid session)]
+    (do
+      (debugf "Next: %s event from %s" event uid)
+      (swap! index dec))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -101,25 +114,25 @@
           (sente/start-server-chsk-router! ch-chsk
                                            event-msg-handler)))
 
-(defn start-broadcaster!
-  "As an example of server>user async pushes, setup a loop to broadcast an
-  event to all connected users every 10 seconds"
-  []
-  (let [send-broadcast
-        (fn [i]
-          (debugf "Broadcasting server>user: %s" @connected-uids)
-          (doseq [uid (:any @connected-uids)]
-            (chsk-send! uid
-                        [:some/broadcast
-                         {:what-is-this "An async broadcast pushed from server"
-                          :how-often "Every second"
-                          :to-whom uid
-                          :i i}])))]
+(defn send-broadcast
+  "Broadcasts index to to any connected clients."
+  [ticks]
+  (debugf "Broadcasting server>user: %s" @connected-uids)
+  (doseq [uid (:any @connected-uids)]
+    (chsk-send! uid
+                [:srv/sync
+                 {:index @index
+                  :how-often "Every second"
+                  :to-whom uid
+                  :ticks ticks}])))
 
-    (go-loop [i 0]
-      (<! (async/timeout 1000))
-      (send-broadcast i)
-      (recur (inc i)))))
+(defn start-broadcaster!
+  "Starts the loop to send out state broadcasts."
+  []
+  (go-loop [i 0]
+    (<! (async/timeout 1000))
+    (send-broadcast i)
+    (recur (inc i))))
 
 ;; Web Server
 (defonce web-server_ (atom nil)) ; {:server _ :port _ :stop-fn (fn [])}

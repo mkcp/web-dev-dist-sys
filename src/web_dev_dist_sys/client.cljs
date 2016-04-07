@@ -7,15 +7,10 @@
 
 (enable-console-print!)
 
-(timbre/debug "Client is running at %s" (.getTime (js/Date.)))
+(timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
 
 (defonce app-state (atom {:text "Hello world!"
                           :index 0}))
-
-(defn index [] (:index @app-state))
-
-(defn inc-index []
-  (swap! app-state #(inc (:index %))))
 
 (defn make-chsk-client
   "Creates a socket connection with server at /chsk"
@@ -35,6 +30,9 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
+(defn sync [state index]
+  (assoc state :index (:index index)))
+
 ;;;; Sente event handlers
 (defmulti -event-msg-handler :id)
 
@@ -46,22 +44,27 @@
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
   [{:as ev-msg :keys [event]}]
-  (timbre/debug "Unhandled event: %s" event))
+  (timbre/debugf "Unhandled event: %s" event))
 
 (defmethod -event-msg-handler :chsk/state
   [{:as ev-msg :keys [?data]}]
   (if (= ?data {:first-open? true})
-    (timbre/debug "Channel socket successfully established!")
-    (timbre/debug "Channel socket state change: %s" ?data)))
+    (timbre/debugf "Channel socket successfully established!")
+    (timbre/debugf "Channel socket state change: %s" ?data)))
 
 (defmethod -event-msg-handler :chsk/recv
   [{:as ev-msg :keys [?data]}]
-  (timbre/debug "Push event from server: %s" ?data))
+  (let [event (first ?data)
+        index (second ?data)]
+    (case event
+      :srv/sync (do
+                  (swap! app-state #(sync % index))
+                  (timbre/debugf "App state is now: %s" @app-state)))))
 
 (defmethod -event-msg-handler :chsk/handshake
   [{:as ev-msg :keys [?data]}]
   (let [[?uid ?csrf-token ?handshake-data] ?data]
-    (timbre/debug "Handshake: %s" ?data)))
+    (timbre/debugf "Handshake: %s" ?data)))
 
 (defonce router_ (atom nil))
 
@@ -77,7 +80,7 @@
 (defn login []
   (let [user-id "kit"]
     (do
-      (timbre/debug "Logging in with user-id %s" user-id)
+      (timbre/debugf "Logging in with user-id %s" user-id)
 
             ;;; Use any login procedure you'd like. Here we'll trigger an Ajax
             ;;; POST request that resets our server-side session. Then we ask
@@ -89,22 +92,25 @@
                         :params  {:user-id (str user-id)}}
 
                        (fn [ajax-resp]
-                         (timbre/debug "Ajax login response: %s" ajax-resp)
+                         (timbre/debugf "Ajax login response: %s" ajax-resp)
                          (do
-                           (timbre/debug "Login successful")
+                           (timbre/debugf "Login successful")
                            (sente/chsk-reconnect! chsk)))))))
+
+(defn slide-prev
+  "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
+  []
+  (do
+    (chsk-send! [:cli/prev])
+    (timbre/debugf "Prev event sent")
+    ))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
   (do
-    (timbre/debug "Next")
-    (chsk-send! [:cli/next {:event :next}])))
-
-(defn sync
-  "Get state from server, if out of date change."
-  []
-  (chsk-send! [:cli/sync (:index @app-state)]))
+    (chsk-send! [:cli/next])
+    (timbre/debugf "Next event sent")))
 
 (defn start! [] (start-router!))
 
@@ -112,11 +118,9 @@
 
 (defn hello-world []
   [:div
-   [:h1 (str "App State: " )]
-   [:h3 (pr-str @app-state)]
-   #_[:button {:on-click prev} "Prev"]
-   [:button {:on-click slide-next} "Next"]
    [:img {:src "slides/title-card.png"}]
+   [:button {:on-click slide-prev} "Prev"]
+   [:button {:on-click slide-next} "Next"]
    ])
 
 (r/render-component [hello-world]
