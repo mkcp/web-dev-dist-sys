@@ -8,9 +8,14 @@
    [clojure.core.async :as async  :refer [<! <!! >! >!! put! chan go go-loop]]
    [taoensso.encore    :as encore]
    [taoensso.timbre    :as timbre :refer [tracef debugf infof warnf errorf]]
+   [taoensso.timbre.appenders.core :refer [spit-appender]]
    [taoensso.sente     :as sente]
    [org.httpkit.server :as http]
    [taoensso.sente.server-adapters.http-kit :refer [sente-web-server-adapter]]))
+
+(timbre/set-config!
+ {:appenders
+  {:spit (spit-appender {:fname "/logs/server.log"})}})
 
 (defn start-selected-web-server!
   [ring-handler port]
@@ -75,7 +80,7 @@
 
 (defmethod -event-msg-handler
   :cli/next
-  [{:as ev-msg :keys [event id ring-req]}]
+  [{:keys [event ring-req]}]
   (let [session (:session ring-req)
         uid (:uid session)]
     (do
@@ -84,7 +89,7 @@
 
 (defmethod -event-msg-handler
   :cli/prev
-  [{:as ev-msg :keys [event id ring-req]}]
+  [{:keys [event id ring-req]}]
   (let [session (:session ring-req)
         uid (:uid session)]
     (do
@@ -114,23 +119,35 @@
           (sente/start-server-chsk-router! ch-chsk
                                            event-msg-handler)))
 
+
 (defn send-broadcast
   "Broadcasts index to to any connected clients."
-  [ticks]
-  (debugf "Broadcasting server>user: %s" @connected-uids)
-  (doseq [uid (:any @connected-uids)]
-    (chsk-send! uid
-                [:srv/sync
-                 {:index @index
-                  :ticks ticks}])))
+  ([ticks]
+   (debugf "Broadcasting server>user: %s" @connected-uids)
+   (doseq [uid (:any @connected-uids)]
+     (chsk-send! uid
+                 [:srv/sync
+                  {:index @index
+                   :ticks ticks}])))
+  ([_ _ _ new-index]
+   (debugf "Broadcasting server>user: %s" @connected-uids)
+   (doseq [uid (:any @connected-uids)]
+     (chsk-send! uid
+                 [:srv/sync {:index new-index}]))))
 
 (defn start-broadcaster!
   "Starts the loop to send out state broadcasts."
   []
   (go-loop [i 0]
-    (<! (async/timeout 120))
+    (<! (async/timeout 64))
     (send-broadcast i)
     (recur (inc i))))
+
+(defn start-index-watcher! []
+  (remove-watch index _))
+
+(defn start-index-watcher! []
+  (add-watch index _ send-broadcast))
 
 ;; Web Server
 (defonce web-server_ (atom nil)) ; {:server _ :port _ :stop-fn (fn [])}
@@ -154,12 +171,21 @@
 
 (defn stop! []
   (stop-router!)
-  (stop-web-server!))
+  (stop-web-server!)
+  (stop-index-watcher!))
 
 (defn start!
   "Starts the router to dispatch for events
   Starts the web server to do work w/ clients.
   And starts the broadcaster to sync index w/ clients."
+  []
+  (do
+    (start-router!)
+    (start-web-server! 10002)
+    (start-index-watcher)))
+
+(defn start-broadcasting!
+  "starts web server with broadcaster"
   []
   (start-router!)
   (start-web-server! 10002)
