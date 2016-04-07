@@ -1,12 +1,30 @@
 # web-dev-dist-sys
 
-This is a series of slide images as well as a web server and browser client for Clojure/West 2016.
+This is a presentation client and server for Web Development is Distributed Systems Programming given at Clojure/West 2016.
 
 ## Overview
 
-FIXME: Write a paragraph about the library/project and highlight its goals.
+This is meant to be used on a private network. There are no security features of any kind.
+
+Slides live in /resources/public/slides
+
+Client and server each have their own src files.
+
+Server broadcasts the slide index to all clients every second. (= tick 1000ms)
+Clients update their current slide based on this sync broadcast.
+
+Within these ticks, the server can receive events for the next broadcast.
+The 
 
 ## Setup
+
+Run from cider:
+
+```
+(use 'figwheel-sidecar.repl-api)
+(start-figwheel!)
+(start!)
+```
 
 To get an interactive development environment run:
 
