@@ -9,8 +9,7 @@
 
 (timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
 
-(defonce app-state (atom {:text "Hello world!"
-                          :index 0}))
+(defonce app-state (atom {:index 0}))
 
 (defn make-chsk-client
   "Creates a socket connection with server at /chsk"
@@ -30,8 +29,9 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
-(defn sync [state index]
-  (assoc state :index (:index index)))
+(defn sync
+  [state {:keys [index]}]
+  (assoc state :index index))
 
 ;;;; Sente event handlers
 (defmulti -event-msg-handler :id)
@@ -40,17 +40,6 @@
   "Wraps `-event-msg-handler` with logging, error catching, etc."
   [{:as ev-msg :keys [id ?data event]}]
   (-event-msg-handler ev-msg))
-
-(defmethod -event-msg-handler
-  :default ; Default/fallback case (no other matching handler)
-  [{:as ev-msg :keys [event]}]
-  (timbre/debugf "Unhandled event: %s" event))
-
-(defmethod -event-msg-handler :chsk/state
-  [{:as ev-msg :keys [?data]}]
-  (if (= ?data {:first-open? true})
-    (timbre/debugf "Channel socket successfully established!")
-    (timbre/debugf "Channel socket state change: %s" ?data)))
 
 (defmethod -event-msg-handler :chsk/recv
   [{:as ev-msg :keys [?data]}]
@@ -61,10 +50,22 @@
                   (swap! app-state #(sync % index))
                   (timbre/debugf "App state is now: %s" @app-state)))))
 
+(defmethod -event-msg-handler :chsk/state
+  [{:as ev-msg :keys [?data]}]
+  (if (= ?data {:first-open? true})
+    (timbre/debugf "Channel socket successfully established!")
+    (timbre/debugf "Channel socket state change: %s" ?data)))
+
 (defmethod -event-msg-handler :chsk/handshake
   [{:as ev-msg :keys [?data]}]
   (let [[?uid ?csrf-token ?handshake-data] ?data]
     (timbre/debugf "Handshake: %s" ?data)))
+
+(defmethod -event-msg-handler
+  :default ; Default/fallback case (no other matching handler)
+  [{:as ev-msg :keys [event]}]
+  (timbre/debugf "Unhandled event: %s" event))
+
 
 (defonce router_ (atom nil))
 
@@ -102,8 +103,7 @@
   []
   (do
     (chsk-send! [:cli/prev])
-    (timbre/debugf "Prev event sent")
-    ))
+    (timbre/debugf "Prev event sent")))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
@@ -117,11 +117,11 @@
 (defonce _start-once (start!))
 
 (defn hello-world []
-  [:div
-   [:img {:src "slides/title-card.png"}]
-   [:button {:on-click slide-prev} "Prev"]
-   [:button {:on-click slide-next} "Next"]
-   ])
+  (let [index (:index @app-state)]
+    [:div
+     [:img {:src (str "slides/web-dev-dist-sys" index ".png")}]
+     [:button {:on-click slide-prev} "Prev"]
+     [:button {:on-click slide-next} "Next"]]))
 
 (r/render-component [hello-world]
                     (. js/document (getElementById "app")))

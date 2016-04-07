@@ -122,15 +122,13 @@
     (chsk-send! uid
                 [:srv/sync
                  {:index @index
-                  :how-often "Every second"
-                  :to-whom uid
                   :ticks ticks}])))
 
 (defn start-broadcaster!
   "Starts the loop to send out state broadcasts."
   []
   (go-loop [i 0]
-    (<! (async/timeout 1000))
+    (<! (async/timeout 120))
     (send-broadcast i)
     (recur (inc i))))
 
