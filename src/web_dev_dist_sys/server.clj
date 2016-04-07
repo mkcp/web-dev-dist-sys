@@ -143,10 +143,14 @@
     (send-broadcast i)
     (recur (inc i))))
 
-(defn start-index-watcher! []
+(defn stop-index-watcher!
+  "Removes watch from index"
+  []
   (remove-watch index _))
 
-(defn start-index-watcher! []
+(defn start-index-watcher!
+  "Watches index for changes and broadcasts new state to all clients."
+  []
   (add-watch index _ send-broadcast))
 
 ;; Web Server
