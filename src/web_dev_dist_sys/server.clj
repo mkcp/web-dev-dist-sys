@@ -13,9 +13,12 @@
    [org.httpkit.server :as http]
    [taoensso.sente.server-adapters.http-kit :refer [sente-web-server-adapter]]))
 
-(timbre/set-config!
- {:appenders
-  {:spit (spit-appender {:fname "/logs/server.log"})}})
+#_(timbre/set-config!
+   {:appenders
+    {:spit (spit-appender {:fname "//server.log"})}})
+
+;; Database
+(def index (atom 1))
 
 (defn start-selected-web-server!
   [ring-handler port]
@@ -25,9 +28,15 @@
      :port    (:local-port (meta stop-fn))
      :stop-fn (fn [] (stop-fn :timeout 100))}))
 
+(defn user-id-fn
+  "Assigns user-id from each client's provided client-id."
+  [ring-req]
+  (:client-id ring-req))
+
 (defn make-channel-socket-server []
   (sente/make-channel-socket-server! sente-web-server-adapter
-                                     {:packer :edn}))
+                                     {:packer :edn
+                                      :user-id-fn user-id-fn}))
 
 ;; Make channel-socket-server then extract its to assign to global vars
 (let [chsk-server (make-channel-socket-server)
@@ -44,7 +53,6 @@
   (def connected-uids                connected-uids) ; Watchable, read-only atom
   )
 
-(def index (atom 1))
 
 (defn landing-pg-handler [ring-req]
   (hiccup/html
@@ -57,7 +65,7 @@
   (GET  "/chsk"  ring-req (ring-ajax-get-or-ws-handshake ring-req))
   (POST "/chsk"  ring-req (ring-ajax-post                ring-req))
   (route/resources "/") ; Static files, notably public/main.js (our cljs target)
-  (route/not-found "<h1>Page not found</h1>"))
+  (route/not-found "<h1>Route not found, 404 :C</h1>"))
 
 (def main-ring-handler
   "**NB**: Sente requires the Ring `wrap-params` + `wrap-keyword-params`
@@ -70,31 +78,22 @@
 ;; Event handlers
 (defmulti -event-msg-handler
   "Multimethod to handle Sente `event-msg`s"
-  :id ; Dispatch on event-id
-  )
+  :id)
 
 (defn event-msg-handler
   "Wraps `-event-msg-handler` with logging, error catching, etc."
-  [{:as ev-msg :keys [id event]}]
-  (-event-msg-handler ev-msg))
-
-(defmethod -event-msg-handler
-  :cli/next
-  [{:keys [event ring-req]}]
+  [{:as ev-msg :keys [event ring-req]}]
   (let [session (:session ring-req)
         uid (:uid session)]
     (do
-      (debugf "Next: %s event from %s" event uid)
-      (swap! index inc))))
+      (debugf "Client: %s sent: %s" uid event)
+      (-event-msg-handler ev-msg))))
 
-(defmethod -event-msg-handler
-  :cli/prev
-  [{:keys [event id ring-req]}]
-  (let [session (:session ring-req)
-        uid (:uid session)]
-    (do
-      (debugf "Next: %s event from %s" event uid)
-      (swap! index dec))))
+(defmethod -event-msg-handler :cli/next [_]
+  (swap! index inc))
+
+(defmethod -event-msg-handler :cli/prev [_]
+  (swap! index dec))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -116,42 +115,41 @@
   []
   (stop-router!)
   (reset! router_
-          (sente/start-server-chsk-router! ch-chsk
-                                           event-msg-handler)))
+          (sente/start-server-chsk-router! ch-chsk event-msg-handler)))
 
-
-(defn send-broadcast
-  "Broadcasts index to to any connected clients."
-  ([ticks]
+(defn send-index
+  "Broadcasts index to any connected clients."
+  ([tick new-index]
    (debugf "Broadcasting server>user: %s" @connected-uids)
    (doseq [uid (:any @connected-uids)]
-     (chsk-send! uid
-                 [:srv/sync
-                  {:index @index
-                   :ticks ticks}])))
+     (chsk-send! uid [:srv/sync {:index new-index
+                                 :tick tick}])))
   ([_ _ _ new-index]
    (debugf "Broadcasting server>user: %s" @connected-uids)
    (doseq [uid (:any @connected-uids)]
-     (chsk-send! uid
-                 [:srv/sync {:index new-index}]))))
+     (chsk-send! uid [:srv/push {:index new-index}]))))
 
-(defn start-broadcaster!
-  "Starts the loop to send out state broadcasts."
+(defonce heartbeat_ (atom nil))
+
+#_(defn stop-heartbeat! [])
+
+(defn start-heartbeat!
+  "Every second, sends out of "
   []
   (go-loop [i 0]
-    (<! (async/timeout 64))
-    (send-broadcast i)
+    (<! (async/timeout 1000))
+    (send-index i @index)
     (recur (inc i))))
 
 (defn stop-index-watcher!
   "Removes watch from index"
   []
-  (remove-watch index _))
+  (remove-watch index :index))
 
 (defn start-index-watcher!
   "Watches index for changes and broadcasts new state to all clients."
   []
-  (add-watch index _ send-broadcast))
+  (add-watch index :index send-index))
 
 ;; Web Server
 (defonce web-server_ (atom nil)) ; {:server _ :port _ :stop-fn (fn [])}
@@ -175,8 +173,8 @@
 
 (defn stop! []
   (stop-router!)
-  (stop-web-server!)
-  (stop-index-watcher!))
+  (stop-index-watcher!)
+  (stop-web-server!))
 
 (defn start!
   "Starts the router to dispatch for events
@@ -185,14 +183,8 @@
   []
   (do
     (start-router!)
-    (start-web-server! 10002)
-    (start-index-watcher)))
-
-(defn start-broadcasting!
-  "starts web server with broadcaster"
-  []
-  (start-router!)
-  (start-web-server! 10002)
-  (start-broadcaster!))
+    (start-index-watcher!)
+    (start-heartbeat!)
+    (start-web-server! 10002)))
 
 (defn -main "For `lein run`, etc." [] (start!))

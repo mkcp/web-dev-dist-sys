@@ -18,7 +18,6 @@
                                      {:type :auto
                                       :packer :edn}))
 
-
 ;; Defines the client's channel and defines vars for various properties
 (defonce state_
   (let [{:keys [chsk ch-recv send-fn state]} (make-chsk-client)]
@@ -41,15 +40,6 @@
   [{:as ev-msg :keys [id ?data event]}]
   (-event-msg-handler ev-msg))
 
-(defmethod -event-msg-handler :chsk/recv
-  [{:as ev-msg :keys [?data]}]
-  (let [event (first ?data)
-        index (second ?data)]
-    (case event
-      :srv/sync (do
-                  (swap! app-state #(sync % index))
-                  (timbre/debugf "App state is now: %s" @app-state)))))
-
 (defmethod -event-msg-handler :chsk/state
   [{:as ev-msg :keys [?data]}]
   (if (= ?data {:first-open? true})
@@ -60,6 +50,19 @@
   [{:as ev-msg :keys [?data]}]
   (let [[?uid ?csrf-token ?handshake-data] ?data]
     (timbre/debugf "Handshake: %s" ?data)))
+
+(defmethod -event-msg-handler :chsk/recv
+  [{:as ev-msg :keys [?data]}]
+  (let [id (first ?data)
+        body (second ?data)]
+    (case id
+      :srv/sync (do
+                  (timbre/debugf "Sync received, %s" (pr-str body))
+                  (swap! app-state sync body))
+      :srv/push (do
+                  (timbre/debugf "Push received: %s" (pr-str body))
+                  (swap! app-state sync body)
+                  ))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -75,28 +78,7 @@
 (defn start-router! []
   (stop-router!)
   (reset! router_
-          (sente/start-client-chsk-router!
-           ch-chsk event-msg-handler)))
-
-(defn login []
-  (let [user-id "kit"]
-    (do
-      (timbre/debugf "Logging in with user-id %s" user-id)
-
-            ;;; Use any login procedure you'd like. Here we'll trigger an Ajax
-            ;;; POST request that resets our server-side session. Then we ask
-            ;;; our channel socket to reconnect, thereby picking up the new
-            ;;; session.
-      (sente/ajax-lite "/login"
-                       {:method :post
-                        :headers {:X-CSRF-Token (:csrf-token @chsk-state)}
-                        :params  {:user-id (str user-id)}}
-
-                       (fn [ajax-resp]
-                         (timbre/debugf "Ajax login response: %s" ajax-resp)
-                         (do
-                           (timbre/debugf "Login successful")
-                           (sente/chsk-reconnect! chsk)))))))
+          (sente/start-client-chsk-router! ch-chsk event-msg-handler)))
 
 (defn slide-prev
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
@@ -116,14 +98,16 @@
 
 (defonce _start-once (start!))
 
-(defn hello-world []
+(defn main []
   (let [index (:index @app-state)]
     [:div
-     [:img {:src (str "slides/web-dev-dist-sys" index ".png")}]
-     [:button {:on-click slide-prev} "Prev"]
-     [:button {:on-click slide-next} "Next"]]))
+     [:div.slide
+      [:img {:src (str "slides/web-dev-dist-sys" index ".png")}]]
+     [:div.nav
+      [:button {:on-click slide-prev} "Prev"]
+      [:button {:on-click slide-next} "Next"]]]))
 
-(r/render-component [hello-world]
+(r/render-component [main]
                     (. js/document (getElementById "app")))
 
 (defn on-js-reload []
