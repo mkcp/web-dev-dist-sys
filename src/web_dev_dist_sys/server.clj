@@ -17,8 +17,10 @@
    {:appenders
     {:spit (spit-appender {:fname "//server.log"})}})
 
-;; Database
 (def index (atom 1))
+
+;; Set manually, and re-evalled in dev.not very sophisticated but it works :D
+(def slide-count (atom 38)) 
 
 (defn start-selected-web-server!
   [ring-handler port]
@@ -56,9 +58,18 @@
 
 (defn landing-pg-handler [ring-req]
   (hiccup/html
-   [:div#app] ;; Figwheel mount point
-   [:script {:src "js/compiled/web_dev_dist_sys.js"}] ; Include our cljs target
-   ))
+   [:head
+    [:meta {:charset "UTF-8"}]
+    [:meta {:name "viewport"
+            :content "width=device-width, initial-scale=1"}]
+    [:link {:href "css/style.css"
+            :rel "stylesheet"
+            :type "text/css"}]]
+
+   [:body
+    [:div#app] ;; Figwheel mount point
+    [:script {:src "js/compiled/web_dev_dist_sys.js"}] ;; Compiled application
+    ]))
 
 (defroutes ring-routes
   (GET  "/"      ring-req (landing-pg-handler            ring-req))
@@ -123,6 +134,7 @@
    (debugf "Broadcasting server>user: %s" @connected-uids)
    (doseq [uid (:any @connected-uids)]
      (chsk-send! uid [:srv/sync {:index new-index
+                                 :count @slide-count
                                  :tick tick}])))
   ([_ _ _ new-index]
    (debugf "Broadcasting server>user: %s" @connected-uids)

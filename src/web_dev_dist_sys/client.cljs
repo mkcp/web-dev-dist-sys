@@ -1,5 +1,7 @@
 (ns web-dev-dist-sys.client
   (:require [clojure.string :as str]
+            [goog.events :as events]
+            [goog.events.KeyCodes :as KeyCodes]
             [taoensso.encore :as encore]
             [taoensso.timbre :as timbre :refer-macros [tracef debugf infof warnf errorf]]
             [taoensso.sente  :as sente  :refer [cb-success?]]
@@ -9,7 +11,20 @@
 
 (timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
 
-(defonce app-state (atom {:index 0}))
+(def input-next #{KeyCodes/UP KeyCodes/RIGHT})
+(def input-prev #{KeyCodes/DOWN KeyCodes/LEFT})
+
+(def map-controls {input-next :next
+                   input-prev :prev})
+
+(defn handle-keyboard [e]
+  (pr-str (.keyCode e)))
+
+(defn listen-keyboard []
+  (events/listen js/window "keydown" handle-keyboard))
+
+(defonce app-state (atom {:index 0
+                          :count 0}))
 
 (defn make-chsk-client
   "Creates a socket connection with server at /chsk"
@@ -28,9 +43,22 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
-(defn sync
+(defn update-index
+  "Assocs the index that the server provided so long as it's not nil."
   [state {:keys [index]}]
-  (assoc state :index index))
+  (do
+    (if index
+      (assoc state :index index))))
+
+(defn handle-sync [state]
+  (do
+    (timbre/debugf "[:srv/sync] event received: %s" state)
+    (swap! app-state update-index state)))
+
+(defn handle-push [state]
+  (do
+    (timbre/debugf "[:srv/push] event received: %s" state)
+    (swap! app-state update-index state)))
 
 ;;;; Sente event handlers
 (defmulti -event-msg-handler :id)
@@ -56,13 +84,8 @@
   (let [id (first ?data)
         body (second ?data)]
     (case id
-      :srv/sync (do
-                  (timbre/debugf "Sync received, %s" (pr-str body))
-                  (swap! app-state sync body))
-      :srv/push (do
-                  (timbre/debugf "Push received: %s" (pr-str body))
-                  (swap! app-state sync body)
-                  ))))
+      :srv/sync (handle-sync body)
+      :srv/push (handle-push body))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -80,32 +103,52 @@
   (reset! router_
           (sente/start-client-chsk-router! ch-chsk event-msg-handler)))
 
+(defn send-event
+  "Wraps event submissions with logging."
+  ([id]
+   (do
+     (chsk-send! [id])
+     (timbre/debugf "[%s] event sent" id)))
+  ([id body]
+   (do
+     (chsk-send! [id body])
+     (timbre/debugf "[%s %s] event sent" id body))))
+
 (defn slide-prev
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
-  (do
-    (chsk-send! [:cli/prev])
-    (timbre/debugf "Prev event sent")))
+  (if-not (zero? (:index @app-state))
+    (send-event :cli/prev)))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
-  (do
-    (chsk-send! [:cli/next])
-    (timbre/debugf "Next event sent")))
+  (send-event :cli/next)
+
+  #_(let [{:keys [count index]} @app-state]
+    (if-not (= count index)
+      (do
+        (chsk-send! [:cli/next])
+        (timbre/debugf ":cli/next event sent")))))
 
 (defn start! [] (start-router!))
 
-(defonce _start-once (start!))
+(defonce _start-once
+  (do
+    (listen-keyboard)
+    (start!)))
+
+(defn get-slide []
+  (let [index (:index @app-state)]
+    (str "slides/web-dev-dist-sys" index ".png")))
 
 (defn main []
-  (let [index (:index @app-state)]
-    [:div
-     [:div.slide
-      [:img {:src (str "slides/web-dev-dist-sys" index ".png")}]]
-     [:div.nav
-      [:button {:on-click slide-prev} "Prev"]
-      [:button {:on-click slide-next} "Next"]]]))
+  [:div
+   [:div.slide-container
+    [:img#slide {:src (get-slide)}]]
+   [:div.nav
+    [:button {:on-click slide-prev} "Prev"]
+    [:button {:on-click slide-next} "Next"]]])
 
 (r/render-component [main]
                     (. js/document (getElementById "app")))
