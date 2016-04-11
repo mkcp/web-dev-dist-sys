@@ -7,24 +7,28 @@
             [taoensso.sente  :as sente  :refer [cb-success?]]
             [reagent.core :as r :refer [atom]]))
 
+;; Dev tooling
 (enable-console-print!)
-
 (timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
 
+;; Database
+(defonce app-state (atom {:index 0
+                          :count 40}))
+
+;; Input handling
 (def input-next #{KeyCodes/UP KeyCodes/RIGHT})
 (def input-prev #{KeyCodes/DOWN KeyCodes/LEFT})
 
-(def map-controls {input-next :next
-                   input-prev :prev})
+(defn input-event [key-pressed]
+  (let [inputs {input-next :cli/next
+                input-prev :cli/prev}]
+    (get key-pressed inputs)))
 
 (defn handle-keyboard [e]
   (pr-str (.keyCode e)))
 
 (defn listen-keyboard []
   (events/listen js/window "keydown" handle-keyboard))
-
-(defonce app-state (atom {:index 0
-                          :count 0}))
 
 (defn make-chsk-client
   "Creates a socket connection with server at /chsk"
@@ -46,9 +50,8 @@
 (defn update-index
   "Assocs the index that the server provided so long as it's not nil."
   [state {:keys [index]}]
-  (do
-    (if index
-      (assoc state :index index))))
+  (if index
+    (assoc state :index index)))
 
 (defn handle-sync [state]
   (do
@@ -117,19 +120,18 @@
 (defn slide-prev
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
-  (if-not (zero? (:index @app-state))
-    (send-event :cli/prev)))
+  (let [{:keys [index]} @app-state
+        first-slide? (fn [idx] (zero? idx))]
+    (if-not (first-slide? index)
+      (send-event :cli/prev))))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
-  (send-event :cli/next)
-
-  #_(let [{:keys [count index]} @app-state]
-    (if-not (= count index)
-      (do
-        (chsk-send! [:cli/next])
-        (timbre/debugf ":cli/next event sent")))))
+  (let [out-of-bounds? (fn [idx c] (>= idx c))
+        {:keys [index count]} @app-state]
+    (if-not (out-of-bounds? index count)
+      (send-event :cli/next))))
 
 (defn start! [] (start-router!))
 

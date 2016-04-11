@@ -20,7 +20,7 @@
 (def index (atom 1))
 
 ;; Set manually, and re-evalled in dev.not very sophisticated but it works :D
-(def slide-count (atom 38)) 
+(def slide-count (atom 40))
 
 (defn start-selected-web-server!
   [ring-handler port]
