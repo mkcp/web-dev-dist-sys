@@ -1,2 +1,12 @@
-/* some style */
+body {
+    background-color: #cfcfcf;
+}
 
+#slide {
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    display: block;
+    max-width: "1280px";
+}
