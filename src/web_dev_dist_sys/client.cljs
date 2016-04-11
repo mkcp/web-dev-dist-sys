@@ -15,21 +15,7 @@
 (defonce app-state (atom {:index 0
                           :count 40}))
 
-;; Input handling
-(def input-next #{KeyCodes/UP KeyCodes/RIGHT})
-(def input-prev #{KeyCodes/DOWN KeyCodes/LEFT})
-
-(defn input-event [key-pressed]
-  (let [inputs {input-next :cli/next
-                input-prev :cli/prev}]
-    (get key-pressed inputs)))
-
-(defn handle-keyboard [e]
-  (pr-str (.keyCode e)))
-
-(defn listen-keyboard []
-  (events/listen js/window "keydown" handle-keyboard))
-
+;; Channel socket setup
 (defn make-chsk-client
   "Creates a socket connection with server at /chsk"
   []
@@ -125,6 +111,7 @@
     (if-not (first-slide? index)
       (send-event :cli/prev))))
 
+;; FIXME Out-of-bounds make consistent w/ slide-prev
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
@@ -133,8 +120,25 @@
     (if-not (out-of-bounds? index count)
       (send-event :cli/next))))
 
+;; Input handling
+(def input-next #{38 39})
+(def input-prev #{40 37})
+
+(defn handle-keyboard
+  "Maps keyCode propery to correct handler."
+  [e]
+  (let [key-code (.-keyCode e)]
+    (cond
+      (input-next key-code) (slide-next)
+      (input-prev key-code) (slide-prev)
+      :else :noop)))
+
+(defn listen-keyboard []
+  (events/listen js/window "keydown" handle-keyboard))
+
 (defn start! [] (start-router!))
 
+;; FIXME
 (defonce _start-once
   (do
     (listen-keyboard)
@@ -144,13 +148,29 @@
   (let [index (:index @app-state)]
     (str "slides/web-dev-dist-sys" index ".png")))
 
+;; FIXME Refactor
 (defn main []
-  [:div
+  [:div.app-container
+   [:div.click-capture {:style {:position "absolute"
+                                :width "100vw"
+                                :height "100vh"
+                                :user-select "none"}}
+
+    [:div.click-left {:style {:width "50vw"
+                              :height "100vh"
+                              :float "left"
+                              :user-select "none"}
+                      :on-click slide-prev}]
+
+    [:div.click-right {:style {:width "50vw"
+                               :height "100vh"
+                               :float "left"
+                               :user-select "none"}
+                       :on-click slide-next}]]
+
    [:div.slide-container
-    [:img#slide {:src (get-slide)}]]
-   [:div.nav
-    [:button {:on-click slide-prev} "Prev"]
-    [:button {:on-click slide-next} "Next"]]])
+    [:img#slide {:src (get-slide)
+                 :style {:user-select "none"}}]]])
 
 (r/render-component [main]
                     (. js/document (getElementById "app")))

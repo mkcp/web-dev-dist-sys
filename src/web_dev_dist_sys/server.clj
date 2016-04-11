@@ -19,7 +19,7 @@
 
 (def index (atom 1))
 
-;; Set manually, and re-evalled in dev.not very sophisticated but it works :D
+;; FIXME Move into app-state
 (def slide-count (atom 40))
 
 (defn start-selected-web-server!
@@ -54,7 +54,6 @@
   (def chsk-send!                    send-fn) ; ChannelSocket's send API fn
   (def connected-uids                connected-uids) ; Watchable, read-only atom
   )
-
 
 (defn landing-pg-handler [ring-req]
   (hiccup/html
@@ -128,6 +127,7 @@
   (reset! router_
           (sente/start-server-chsk-router! ch-chsk event-msg-handler)))
 
+;; FIXME
 (defn send-index
   "Broadcasts index to any connected clients."
   ([tick new-index]
@@ -145,6 +145,7 @@
 
 #_(defn stop-heartbeat! [])
 
+;; FIXME
 (defn start-heartbeat!
   "Every second, sends out of "
   []
