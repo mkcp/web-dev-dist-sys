@@ -17,10 +17,15 @@
    {:appenders
     {:spit (spit-appender {:fname "//server.log"})}})
 
-(def index (atom 1))
+(let [slides-dir (clojure.java.io/file "/path/to/directory")
+      slides (file-seq slides-dir)]
+  (def slide-count (atom (count slides)) ))
 
-;; FIXME Move into app-state
-(def slide-count (atom 40))
+;; FIXME App-state
+(def index (atom 1))
+(defonce app-state (atom {:index @index
+                          :count @slide-count}))
+
 
 (defn start-selected-web-server!
   [ring-handler port]

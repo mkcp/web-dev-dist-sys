@@ -13,7 +13,7 @@
 
 ;; Database
 (defonce app-state (atom {:index 0
-                          :count 40}))
+                          :count 88}))
 
 ;; Channel socket setup
 (defn make-chsk-client
