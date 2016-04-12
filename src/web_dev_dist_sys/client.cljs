@@ -121,16 +121,16 @@
       (send-event :cli/next))))
 
 ;; Input handling
-(def input-next #{38 39})
 (def input-prev #{40 37})
+(def input-next #{38 39})
 
 (defn handle-keyboard
   "Maps keyCode propery to correct handler."
   [e]
   (let [key-code (.-keyCode e)]
     (cond
-      (input-next key-code) (slide-next)
       (input-prev key-code) (slide-prev)
+      (input-next key-code) (slide-next)
       :else :noop)))
 
 (defn listen-keyboard []
@@ -138,7 +138,7 @@
 
 (defn start! [] (start-router!))
 
-;; FIXME
+;; FIXME Maybe?
 (defonce _start-once
   (do
     (listen-keyboard)
@@ -151,26 +151,12 @@
 ;; FIXME Refactor
 (defn main []
   [:div.app-container
-   [:div.click-capture {:style {:position "absolute"
-                                :width "100vw"
-                                :height "100vh"
-                                :user-select "none"}}
-
-    [:div.click-left {:style {:width "50vw"
-                              :height "100vh"
-                              :float "left"
-                              :user-select "none"}
-                      :on-click slide-prev}]
-
-    [:div.click-right {:style {:width "50vw"
-                               :height "100vh"
-                               :float "left"
-                               :user-select "none"}
-                       :on-click slide-next}]]
+   [:div.click-container
+    [:div.click-left {:on-click slide-prev}]
+    [:div.click-right {:on-click slide-next}]]
 
    [:div.slide-container
-    [:img#slide {:src (get-slide)
-                 :style {:user-select "none"}}]]])
+    [:img#slide.noselect {:src (get-slide)}]]])
 
 (r/render-component [main]
                     (. js/document (getElementById "app")))
