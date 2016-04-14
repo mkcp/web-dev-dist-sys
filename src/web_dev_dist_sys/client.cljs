@@ -11,9 +11,9 @@
 (enable-console-print!)
 (timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
 
-;; Database
+;; Database, init with some scratch vals.
 (defonce app-state (atom {:index 0
-                          :count 88}))
+                          :count 100}))
 
 ;; Channel socket setup
 (defn make-chsk-client
@@ -33,21 +33,14 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
-(defn update-index
-  "Assocs the index that the server provided so long as it's not nil."
-  [state {:keys [index]}]
-  (if index
-    (assoc state :index index)))
-
-(defn handle-sync [state]
-  (do
-    (timbre/debugf "[:srv/sync] event received: %s" state)
-    (swap! app-state update-index state)))
-
-(defn handle-push [state]
-  (do
-    (timbre/debugf "[:srv/push] event received: %s" state)
-    (swap! app-state update-index state)))
+;; FIXME Hella janky. Yea...
+(defn update-app-state
+  [app-state {:keys [index count] :as new-state}]
+  (let [index (or index 0)
+        count (or count 1)]
+    (assoc app-state
+           :index index
+           :count count)))
 
 ;;;; Sente event handlers
 (defmulti -event-msg-handler :id)
@@ -55,6 +48,7 @@
 (defn event-msg-handler
   "Wraps `-event-msg-handler` with logging, error catching, etc."
   [{:as ev-msg :keys [id ?data event]}]
+  (timbre/debugf "%s" event)
   (-event-msg-handler ev-msg))
 
 (defmethod -event-msg-handler :chsk/state
@@ -73,8 +67,8 @@
   (let [id (first ?data)
         body (second ?data)]
     (case id
-      :srv/sync (handle-sync body)
-      :srv/push (handle-push body))))
+      :srv/sync (swap! app-state update-app-state body)
+      :srv/push (swap! app-state update-app-state body))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -111,7 +105,6 @@
     (if-not (first-slide? index)
       (send-event :cli/prev))))
 
-;; FIXME Out-of-bounds make consistent w/ slide-prev
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
@@ -148,7 +141,6 @@
   (let [index (:index @app-state)]
     (str "slides/web-dev-dist-sys" index ".png")))
 
-;; FIXME Refactor
 (defn main []
   [:div.app-container
    [:div.click-container

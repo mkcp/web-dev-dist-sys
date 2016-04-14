@@ -13,19 +13,20 @@
    [org.httpkit.server :as http]
    [taoensso.sente.server-adapters.http-kit :refer [sente-web-server-adapter]]))
 
+;; FIXME
 #_(timbre/set-config!
    {:appenders
     {:spit (spit-appender {:fname "//server.log"})}})
 
-(let [slides-dir (clojure.java.io/file "/path/to/directory")
-      slides (file-seq slides-dir)]
-  (def slide-count (atom (count slides)) ))
+(defn get-count
+  "FIXME: This should ignore hidden files. It's currently off by 2."
+  []
+  (let [slides-dir (clojure.java.io/file "./resources/public/slides/")
+        slides (file-seq slides-dir)]
+    (count slides)))
 
-;; FIXME App-state
-(def index (atom 1))
-(defonce app-state (atom {:index @index
-                          :count @slide-count}))
-
+(def app-state (atom {:index 0
+                      :count (get-count)}))
 
 (defn start-selected-web-server!
   [ring-handler port]
@@ -104,11 +105,23 @@
       (debugf "Client: %s sent: %s" uid event)
       (-event-msg-handler ev-msg))))
 
-(defmethod -event-msg-handler :cli/next [_]
-  (swap! index inc))
+(defn dec-index
+  [{:keys [index] :as state}]
+  (assoc state :index (dec index)))
 
-(defmethod -event-msg-handler :cli/prev [_]
-  (swap! index dec))
+(defn inc-index
+  [{:keys [index] :as state}]
+  (assoc state :index (inc index)))
+
+(defmethod -event-msg-handler
+  :cli/prev
+  [_]
+  (swap! app-state dec-index))
+
+(defmethod -event-msg-handler
+  :cli/next
+  [_]
+  (swap! app-state inc-index))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -132,19 +145,20 @@
   (reset! router_
           (sente/start-server-chsk-router! ch-chsk event-msg-handler)))
 
-;; FIXME
-(defn send-index
-  "Broadcasts index to any connected clients."
-  ([tick new-index]
-   (debugf "Broadcasting server>user: %s" @connected-uids)
-   (doseq [uid (:any @connected-uids)]
-     (chsk-send! uid [:srv/sync {:index new-index
-                                 :count @slide-count
-                                 :tick tick}])))
-  ([_ _ _ new-index]
-   (debugf "Broadcasting server>user: %s" @connected-uids)
-   (doseq [uid (:any @connected-uids)]
-     (chsk-send! uid [:srv/push {:index new-index}]))))
+(defn sync-client
+  [tick]
+  (debugf "Broadcasting server>user: %s" @connected-uids)
+  (let [{:keys [index count]} @app-state]
+    (doseq [uid (:any @connected-uids)]
+      (chsk-send! uid [:srv/sync {:index index
+                                  :count count
+                                  :tick tick}]))))
+
+(defn push-client
+  [_ _ _ new-state]
+  (debugf "Broadcasting server>user: %s" @connected-uids)
+  (doseq [uid (:any @connected-uids)]
+    (chsk-send! uid [:srv/push new-state])))
 
 (defonce heartbeat_ (atom nil))
 
@@ -156,18 +170,18 @@
   []
   (go-loop [i 0]
     (<! (async/timeout 1000))
-    (send-index i @index)
+    (sync-client i)
     (recur (inc i))))
 
-(defn stop-index-watcher!
+(defn stop-watcher!
   "Removes watch from index"
   []
-  (remove-watch index :index))
+  (remove-watch app-state :index))
 
-(defn start-index-watcher!
+(defn start-watcher!
   "Watches index for changes and broadcasts new state to all clients."
   []
-  (add-watch index :index send-index))
+  (add-watch app-state :index push-client))
 
 ;; Web Server
 (defonce web-server_ (atom nil)) ; {:server _ :port _ :stop-fn (fn [])}
@@ -189,9 +203,11 @@
       (catch java.awt.HeadlessException _))
     (reset! web-server_ server-map)))
 
-(defn stop! []
+(defn stop!
+  "FIXME: Doesn't stop the heartbeat! Broken!! :D"
+  []
   (stop-router!)
-  (stop-index-watcher!)
+  (stop-watcher!)
   (stop-web-server!))
 
 (defn start!
@@ -201,7 +217,7 @@
   []
   (do
     (start-router!)
-    (start-index-watcher!)
+    (start-watcher!)
     (start-heartbeat!)
     (start-web-server! 10002)))
 
