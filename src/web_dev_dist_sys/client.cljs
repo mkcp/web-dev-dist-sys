@@ -13,7 +13,7 @@
 
 ;; Database, init with some scratch vals.
 (defonce app-state (atom {:index 0
-                          :count 100}))
+                          :count 80}))
 
 ;; Channel socket setup
 (defn make-chsk-client
@@ -68,7 +68,9 @@
         body (second ?data)]
     (case id
       :srv/sync (swap! app-state update-app-state body)
-      :srv/push (swap! app-state update-app-state body))))
+      :srv/push (do
+                  (timbre/debug "%s" body)
+                  (swap! app-state update-app-state body)))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)

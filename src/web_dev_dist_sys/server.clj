@@ -19,11 +19,12 @@
     {:spit (spit-appender {:fname "//server.log"})}})
 
 (defn get-count
-  "FIXME: This should ignore hidden files. It's currently off by 2."
+  "FIXME: This should actually ignore hidden files instead of deccing again. .DS_Store
+  does not exist in all systems, so this is a bug but hey it's a talk lol."
   []
   (let [slides-dir (clojure.java.io/file "./resources/public/slides/")
         slides (file-seq slides-dir)]
-    (count slides)))
+    (dec (dec (count slides)))))
 
 (def app-state (atom {:index 0
                       :count (get-count)}))
@@ -156,7 +157,7 @@
 
 (defn push-client
   [_ _ _ new-state]
-  (debugf "Broadcasting server>user: %s" @connected-uids)
+  (debugf "Pushing state to: %s" @connected-uids)
   (doseq [uid (:any @connected-uids)]
     (chsk-send! uid [:srv/push new-state])))
 
