@@ -1,24 +1,23 @@
 # web-dev-dist-sys
 
-This is a presentation client and server for Web Development is Distributed Systems Programming given at Clojure/West 2016.
+This is a presentation client and server for Web Development is Distributed Systems Programming presented at Clojure/West 2016 and Abstractions 2016.
 
 ## Overview
 
-This is meant to be used on a private network. There are no security features of any kind.
+This designed for use on a private network, so there are no authentication features. I used my phone's hotspot to connect my laptop, running the server and a client for presenting, and my phone for driving the slides.
 
-Slides live in /resources/public/slides
+The pngs for the slides live in `/resources/public/slides`.
 
-Client and server each have their own src files.
+The client and server each have their own sections in src files. The server serves both the slide client behavior through ws channels, as well as providing the client resources with http.
 
-Server broadcasts the slide index to all clients every second. (= tick 1000ms)
-Clients update their current slide based on this sync broadcast.
+The server broadcasts the slide index to all clients every second. (= tick 1000ms)
+Clients are designed to immediately override their local index replica with the server's index.
 
-Within these ticks, the server can receive events for the next broadcast.
-The 
+The server is available to receive and affect index events from clients regardless of when a tick happens. Events are taken in order off of sente's event queue and applied to the server's index.
 
 ## Setup
 
-Run from cider:
+To run with cider:
 
 ```
 (use 'figwheel-sidecar.repl-api)
