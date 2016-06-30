@@ -1,4 +1,5 @@
 (ns web-dev-dist-sys.server
+  "Server for the talk Wev Development Is Distributed Systems Programming."
   (:require
    [clojure.string     :as str]
    [ring.middleware.defaults]
@@ -7,27 +8,26 @@
    [hiccup.core        :as hiccup]
    [clojure.core.async :as async  :refer [<! <!! >! >!! put! chan go go-loop]]
    [taoensso.encore    :as encore]
-   [taoensso.timbre    :as timbre :refer [tracef debugf infof warnf errorf]]
+   [taoensso.timbre    :as timbre]
    [taoensso.timbre.appenders.core :refer [spit-appender]]
    [taoensso.sente     :as sente]
    [org.httpkit.server :as http]
    [taoensso.sente.server-adapters.http-kit :refer [sente-web-server-adapter]]))
 
-;; FIXME
-#_(timbre/set-config!
-   {:appenders
-    {:spit (spit-appender {:fname "//server.log"})}})
+(timbre/set-config!
+ {:appenders {:spit (spit-appender {:fname "./server.log"})}})
 
-(defn get-count
-  "FIXME: This should actually ignore hidden files instead of deccing again. .DS_Store
-  does not exist in all systems, so this is a bug but hey it's a talk lol."
+(defn get-max-index
+  "Counts the number of slides in the folder and decs to 0 index."
   []
   (let [slides-dir (clojure.java.io/file "./resources/public/slides/")
-        slides (file-seq slides-dir)]
-    (dec (dec (count slides)))))
+        slides (file-seq slides-dir)
+        names (map #(.getName %) slides)
+        filtered (filter #(re-find #"^web" %) names)]
+    (dec (count filtered))))
 
 (def app-state (atom {:index 0
-                      :count (get-count)}))
+                      :count (get-max-index)}))
 
 (defn start-selected-web-server!
   [ring-handler port]
@@ -106,26 +106,19 @@
       (debugf "Client: %s sent: %s" uid event)
       (-event-msg-handler ev-msg))))
 
-(defn dec-index
-  [{:keys [index] :as state}]
+(defn dec-index [{:keys [index] :as state}]
   (assoc state :index (dec index)))
 
-(defn inc-index
-  [{:keys [index] :as state}]
+(defn inc-index [{:keys [index] :as state}]
   (assoc state :index (inc index)))
 
-(defmethod -event-msg-handler
-  :cli/prev
-  [_]
+(defmethod -event-msg-handler :cli/prev [_]
   (swap! app-state dec-index))
 
-(defmethod -event-msg-handler
-  :cli/next
-  [_]
+(defmethod -event-msg-handler :cli/next [_]
   (swap! app-state inc-index))
 
-(defmethod -event-msg-handler
-  :default ; Default/fallback case (no other matching handler)
+(defmethod -event-msg-handler :default ; Default/fallback case (no other matching handler)
   [{:as ev-msg :keys [event id ?data ring-req ?reply-fn send-fn]}]
   (let [session (:session ring-req)
         uid     (:uid     session)]
@@ -165,7 +158,7 @@
 
 #_(defn stop-heartbeat! [])
 
-;; FIXME
+;; FIXME Define this channel somewhere so it can be closed.
 (defn start-heartbeat!
   "Every second, sends out of "
   []
@@ -205,7 +198,7 @@
     (reset! web-server_ server-map)))
 
 (defn stop!
-  "FIXME: Doesn't stop the heartbeat! Broken!! :D"
+  "FIXME: Send the heartbeat channel a nil please."
   []
   (stop-router!)
   (stop-watcher!)
@@ -214,12 +207,15 @@
 (defn start!
   "Starts the router to dispatch for events
   Starts the web server to do work w/ clients.
-  And starts the broadcaster to sync index w/ clients."
+  And starts the heartbeat to sync index w/ clients every 1000ms."
   []
   (do
     (start-router!)
     (start-watcher!)
     (start-heartbeat!)
     (start-web-server! 10002)))
+
+(defn cider-stop! [] (stop!))
+(defn cider-start! [] (start!))
 
 (defn -main "For `lein run`, etc." [] (start!))
