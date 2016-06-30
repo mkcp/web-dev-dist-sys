@@ -63,13 +63,13 @@
     (timbre/debugf "Handshake: %s" ?data)))
 
 (defmethod -event-msg-handler :chsk/recv
-  [{:as ev-msg :keys [?data]}]
+  [{:as ev-msg :keys [event ?data]}]
   (let [id (first ?data)
         body (second ?data)]
     (case id
       :srv/sync (swap! app-state update-app-state body)
       :srv/push (do
-                  (timbre/debug "%s" body)
+                  (timbre/debug event)
                   (swap! app-state update-app-state body)))))
 
 (defmethod -event-msg-handler
@@ -91,21 +91,17 @@
 (defn send-event
   "Wraps event submissions with logging."
   ([id]
-   (do
-     (chsk-send! [id])
-     (timbre/debugf "[%s] event sent" id)))
+   (send-event id {}))
   ([id body]
-   (do
-     (chsk-send! [id body])
-     (timbre/debugf "[%s %s] event sent" id body))))
+   (chsk-send! [id body])
+   (timbre/debugf "[%s %s] event sent" id body)))
 
 (defn slide-prev
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
-  (let [{:keys [index]} @app-state
-        first-slide? (fn [idx] (zero? idx))]
-    (if-not (first-slide? index)
-      (send-event :cli/prev))))
+  (let [{:keys [index]} @app-state]
+    (if-not (zero? index)
+      (send-event :cli/prev {:index index}))))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
@@ -113,7 +109,7 @@
   (let [out-of-bounds? (fn [idx c] (>= idx c))
         {:keys [index count]} @app-state]
     (if-not (out-of-bounds? index count)
-      (send-event :cli/next))))
+      (send-event :cli/next {:index index}))))
 
 ;; Input handling
 (def input-prev #{40 37})
@@ -143,7 +139,7 @@
   (let [index (:index @app-state)]
     (str "slides/web-dev-dist-sys" index ".png")))
 
-(defn main []
+(defn layout []
   [:div.app-container
    [:div.click-container
     [:div.click-left {:on-click slide-prev}]
@@ -152,11 +148,5 @@
    [:div.slide-container
     [:img#slide.noselect {:src (get-slide)}]]])
 
-(r/render-component [main]
+(r/render-component [layout]
                     (. js/document (getElementById "app")))
-
-(defn on-js-reload []
-  ;; optionally touch your app-state to force rerendering depending on
-  ;; your application
-  ;; (swap! app-state update-in [:__figwheel_counter] inc)
-  )
