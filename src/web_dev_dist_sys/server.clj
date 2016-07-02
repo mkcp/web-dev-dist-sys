@@ -6,16 +6,17 @@
    [compojure.core     :as comp :refer [defroutes GET POST]]
    [compojure.route    :as route]
    [hiccup.core        :as hiccup]
-   [clojure.core.async :as async  :refer [<! <!! >! >!! put! chan go go-loop]]
+   [clojure.core.async :as async  :refer [<! <!! >! >!! put! chan go go-loop close!]]
    [taoensso.encore    :as encore]
    [taoensso.timbre    :as timbre]
    [taoensso.timbre.appenders.core :refer [spit-appender]]
    [taoensso.sente     :as sente]
-   [org.httpkit.server :as http]
-   [taoensso.sente.server-adapters.http-kit :refer [sente-web-server-adapter]]))
+   [taoensso.sente.server-adapters.http-kit :refer [sente-web-server-adapter]]
+   [org.httpkit.server :as http]))
 
+;; FIXME This is really simple, why isn't the spit appender working?
 (timbre/set-config!
- {:appenders {:spit (spit-appender {:fname "./server.log"})}})
+ {:appenders {:spit (spit-appender)}})
 
 (defn get-max-index
   "Counts the number of slides in the folder and decs to 0 index."
@@ -31,7 +32,7 @@
 
 (defn start-selected-web-server!
   [ring-handler port]
-  (infof "Starting http-kit...")
+  (timbre/infof "Starting http-kit...")
   (let [stop-fn (http/run-server ring-handler {:port port})]
     {:server  nil ; http-kit doesn't expose this
      :port    (:local-port (meta stop-fn))
@@ -85,12 +86,14 @@
   (route/not-found "<h1>Route not found, 404 :C</h1>"))
 
 (def main-ring-handler
-  "**NB**: Sente requires the Ring `wrap-params` + `wrap-keyword-params`
-  middleware to work. These are included with
-  `ring.middleware.defaults/wrap-defaults` - but you'll need to ensure
-  that they're included yourself if you're not using `wrap-defaults`."
-  (ring.middleware.defaults/wrap-defaults
-    ring-routes ring.middleware.defaults/site-defaults))
+  (ring.middleware.defaults/wrap-defaults ring-routes
+                                          ring.middleware.defaults/site-defaults))
+
+(defn dec-index [{:keys [index] :as state}]
+  (assoc state :index (dec index)))
+
+(defn inc-index [{:keys [index] :as state}]
+  (assoc state :index (inc index)))
 
 ;; Event handlers
 (defmulti -event-msg-handler
@@ -102,15 +105,8 @@
   [{:as ev-msg :keys [event ring-req]}]
   (let [session (:session ring-req)
         uid (:uid session)]
-    (do
-      (debugf "Client: %s sent: %s" uid event)
-      (-event-msg-handler ev-msg))))
-
-(defn dec-index [{:keys [index] :as state}]
-  (assoc state :index (dec index)))
-
-(defn inc-index [{:keys [index] :as state}]
-  (assoc state :index (inc index)))
+    (timbre/debugf "Client: %s sent: %s" uid event)
+    (-event-msg-handler ev-msg)))
 
 (defmethod -event-msg-handler :cli/prev [_]
   (swap! app-state dec-index))
@@ -122,7 +118,7 @@
   [{:as ev-msg :keys [event id ?data ring-req ?reply-fn send-fn]}]
   (let [session (:session ring-req)
         uid     (:uid     session)]
-    (debugf "Unhandled event: %s" event)
+    (timbre/debugf "Unhandled event: %s" event)
     (when ?reply-fn
       (?reply-fn {:umatched-event-as-echoed-from-from-server event}))))
 
@@ -141,7 +137,7 @@
 
 (defn sync-client
   [tick]
-  (debugf "Broadcasting server>user: %s" @connected-uids)
+  (timbre/debugf "Broadcasting server>user: %s" @connected-uids)
   (let [{:keys [index count]} @app-state]
     (doseq [uid (:any @connected-uids)]
       (chsk-send! uid [:srv/sync {:index index
@@ -150,22 +146,23 @@
 
 (defn push-client
   [_ _ _ new-state]
-  (debugf "Pushing state to: %s" @connected-uids)
+  (timbre/debugf "Pushing state to: %s" @connected-uids)
   (doseq [uid (:any @connected-uids)]
     (chsk-send! uid [:srv/push new-state])))
 
 (defonce heartbeat_ (atom nil))
 
-#_(defn stop-heartbeat! [])
+(defn stop-heartbeat! []
+  (close! @heartbeat_))
 
-;; FIXME Define this channel somewhere so it can be closed.
 (defn start-heartbeat!
   "Every second, sends out of "
   []
-  (go-loop [i 0]
-    (<! (async/timeout 1000))
-    (sync-client i)
-    (recur (inc i))))
+  (reset! heartbeat_
+          (go-loop [i 0]
+            (<! (async/timeout 1000))
+            (sync-client i)
+            (recur (inc i)))))
 
 (defn stop-watcher!
   "Removes watch from index"
@@ -191,29 +188,30 @@
                                     (or port 0) ; 0 => auto (any available) port
                                     )
         uri (format "http://localhost:%s/" port)]
-    (infof "Web server is running at `%s`" uri)
+    (timbre/infof "Web server is running at `%s`" uri)
     (try
       (.browse (java.awt.Desktop/getDesktop) (java.net.URI. uri))
       (catch java.awt.HeadlessException _))
     (reset! web-server_ server-map)))
 
 (defn stop!
-  "FIXME: Send the heartbeat channel a nil please."
+  "Resets the state of all server components."
   []
   (stop-router!)
   (stop-watcher!)
+  (stop-heartbeat!)
   (stop-web-server!))
 
+;; TODO Define protocols for stateful system components.
 (defn start!
   "Starts the router to dispatch for events
   Starts the web server to do work w/ clients.
   And starts the heartbeat to sync index w/ clients every 1000ms."
   []
-  (do
-    (start-router!)
-    (start-watcher!)
-    (start-heartbeat!)
-    (start-web-server! 10002)))
+  (start-router!)
+  (start-watcher!)
+  (start-heartbeat!)
+  (start-web-server! 10002))
 
 (defn cider-stop! [] (stop!))
 (defn cider-start! [] (start!))
