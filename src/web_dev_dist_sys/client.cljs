@@ -7,6 +7,9 @@
             [taoensso.sente  :as sente  :refer [cb-success?]]
             [reagent.core :as r :refer [atom]]))
 
+
+;; TODO Add a socket-closed state in the UI.
+
 ;; Dev tooling
 (enable-console-print!)
 (timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
@@ -33,7 +36,7 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
-;; FIXME Hella janky. Yea...
+;; FIXME Make sure that updates are 
 (defn update-app-state
   [app-state {:keys [index count] :as new-state}]
   (let [index (or index 0)
@@ -136,15 +139,16 @@
     (start!)))
 
 (defn get-slide []
-  (let [index (:index @app-state)]
-    (str "slides/web-dev-dist-sys" index ".png")))
+  (let [prefix "slides/web-dev-dist-sys"
+        index (:index @app-state)
+        extension ".png"]
+    (str prefix index extension)))
 
 (defn layout []
   [:div.app-container
    [:div.click-container
     [:div.click-left {:on-click slide-prev}]
     [:div.click-right {:on-click slide-next}]]
-
    [:div.slide-container
     [:img#slide.noselect {:src (get-slide)}]]])
 
