@@ -16,7 +16,7 @@
 
 ;; Database, init with some scratch vals.
 (defonce app-state (atom {:index 0
-                          :count 80}))
+                          :count 0}))
 
 ;; Channel socket setup
 (defn make-chsk-client
@@ -104,7 +104,7 @@
   []
   (let [{:keys [index]} @app-state]
     (if-not (zero? index)
-      (send-event :cli/prev {:index index}))))
+      (send-event :cli/prev {:index index :send-time (.getTime (js/Date.))}))))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
@@ -112,7 +112,7 @@
   (let [out-of-bounds? (fn [idx c] (>= idx c))
         {:keys [index count]} @app-state]
     (if-not (out-of-bounds? index count)
-      (send-event :cli/next {:index index}))))
+      (send-event :cli/next {:index index :send-time (.getTime (js/Date.))}))))
 
 ;; Input handling
 (def input-prev #{40 37})
