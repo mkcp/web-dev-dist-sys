@@ -1,4 +1,4 @@
-(defproject web-dev-dist-sys "0.1.0-SNAPSHOT"
+(defproject web-dev-dist-sys "0.2.0"
   :description "Slides application for Web Dev is Dist Sys."
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -50,5 +50,4 @@
                            :optimizations :advanced
                            :pretty-print false}}]}
 
-  :figwheel {:css-dirs ["resources/public/css"] ;; watch and update CSS 
-             })
+  :figwheel {:css-dirs ["resources/public/css"]})
