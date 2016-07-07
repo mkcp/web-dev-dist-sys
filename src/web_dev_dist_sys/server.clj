@@ -16,8 +16,9 @@
    [org.httpkit.server :as http]
    [figwheel-sidecar.repl-api :as fig]))
 
+
 (timbre/set-config! {:level :info
-                     :appenders {:rotor (rotor/rotor-appender {:max-size 5000
+                     :appenders {:rotor (rotor/rotor-appender {:max-size (* 1024 1024)
                                                                :backlog 10
                                                                :path "./web-dev-dist-sys.log"})}})
 
@@ -31,15 +32,13 @@
     (dec (count filtered))))
 
 (def app-state (atom {:index 0
-                      :count (get-max-index)}))
+                      :count (get-max-index)
+                      :log []}))
 
-(defn start-selected-web-server!
-  [ring-handler port]
-  (timbre/infof "Starting presentation server.")
-  (let [stop-fn (http/run-server ring-handler {:port port})]
-    {:server  nil ; http-kit doesn't expose this
-     :port    (:local-port (meta stop-fn))
-     :stop-fn (fn [] (stop-fn :timeout 100))}))
+(defn append-entry [entry]
+  (let [new-log (conj (:log @app-state) entry)]
+    (swap! app-state assoc :log new-log)))
+
 
 (defn user-id-fn
   "Assigns user-id from each client's provided client-id."
@@ -51,7 +50,8 @@
                                      {:packer :edn
                                       :user-id-fn user-id-fn}))
 
-;; Make channel-socket-server then extract its to assign to global vars
+;; Make channel-socket-server then extract its keys to assign to vars on this ns.
+;; Honestly this is pretty janky, you should model this within the server better.
 (let [chsk-server (make-channel-socket-server)
       {:keys [ch-recv
               send-fn
@@ -105,7 +105,7 @@
   "Wraps `-event-msg-handler` with logging, error catching, etc."
   [{:as ev-msg :keys [event ring-req]}]
   (let [session (:session ring-req)
-        uid (:uid session)]
+        uid (:client-id ring-req)]
     (timbre/info (str "UID: " uid " Event:" event))
     (-event-msg-handler ev-msg)))
 
@@ -161,7 +161,6 @@
 (defn start-heartbeat!
   "Every second, sends out of "
   []
-  (stop-heartbeat!)
   (reset! heartbeat_
           (go-loop [i 0]
             (<! (async/timeout 1000))
@@ -176,7 +175,6 @@
 (defn start-watcher!
   "Watches index for changes and broadcasts new state to all clients."
   []
-  (stop-watcher!)
   (add-watch app-state :index push-client))
 
 (defonce web-server_ (atom nil))
@@ -185,8 +183,14 @@
   (when-let [m @web-server_]
     ((:stop-fn m))))
 
+(defn start-selected-web-server!
+  [ring-handler port]
+  (timbre/infof "Starting presentation server.")
+  (let [stop-fn (http/run-server ring-handler {:port port})]
+    {:port    (:local-port (meta stop-fn))
+     :stop-fn (fn [] (stop-fn :timeout 100))}))
+
 (defn start-web-server! [& [port]]
-  (stop-web-server!)
   (let [{:keys [stop-fn port] :as server-map}
         (start-selected-web-server! (var main-ring-handler)
                                     (or port 0) ; 0 => auto (any available) port
@@ -206,6 +210,8 @@
   (stop-heartbeat!)
   (stop-web-server!))
 
+
+;; TODO Add stop-fns to parts of the system.
 (defn start!
   "Starts the router to dispatch for events
   Starts the web server to do work w/ clients.
