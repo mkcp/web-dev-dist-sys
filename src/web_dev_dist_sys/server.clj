@@ -31,13 +31,13 @@
         filtered (filter #(re-find #"^web" %) names)]
     (dec (count filtered))))
 
-(def app-state (atom {:index 0
-                      :count (get-max-index)
-                      :log []}))
+(def db (atom {:index 0
+               :count (get-max-index)
+               :log []}))
 
 (defn append-entry [entry]
-  (let [new-log (conj (:log @app-state) entry)]
-    (swap! app-state assoc :log new-log)))
+  (let [new-log (conj (:log @db) entry)]
+    (swap! db assoc :log new-log)))
 
 
 (defn user-id-fn
@@ -110,10 +110,10 @@
     (-event-msg-handler ev-msg)))
 
 (defmethod -event-msg-handler :cli/prev [_]
-  (swap! app-state dec-index))
+  (swap! db dec-index))
 
 (defmethod -event-msg-handler :cli/next [_]
-  (swap! app-state inc-index))
+  (swap! db inc-index))
 
 (defmethod -event-msg-handler :default ; Default/fallback case (no other matching handler)
   [{:as ev-msg :keys [event id ?data ring-req ?reply-fn send-fn]}]
@@ -139,7 +139,7 @@
 (defn sync-client
   [tick]
   (timbre/debugf "Broadcasting server>user: %s" @connected-uids)
-  (let [{:keys [index count]} @app-state]
+  (let [{:keys [index count]} @db]
     (doseq [uid (:any @connected-uids)]
       (chsk-send! uid [:srv/sync {:index index
                                   :count count
@@ -170,12 +170,12 @@
 (defn stop-watcher!
   "Removes watch from index"
   []
-  (remove-watch app-state :index))
+  (remove-watch db :index))
 
 (defn start-watcher!
   "Watches index for changes and broadcasts new state to all clients."
   []
-  (add-watch app-state :index push-client))
+  (add-watch db :index push-client))
 
 (defonce web-server_ (atom nil))
 

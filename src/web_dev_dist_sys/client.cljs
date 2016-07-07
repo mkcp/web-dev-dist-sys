@@ -8,15 +8,15 @@
             [reagent.core :as r :refer [atom]]))
 
 
-;; TODO Add a socket-closed state in the UI.
+;; TODO Add a socket-closed state.
 
 ;; Dev tooling
 (enable-console-print!)
 (timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
 
 ;; Database, init with some scratch vals.
-(defonce app-state (atom {:index 0
-                          :count 0}))
+(defonce db (atom {:index 0
+                   :count 0}))
 
 ;; Channel socket setup
 (defn make-chsk-client
@@ -36,7 +36,6 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
-;; FIXME Make sure that updates are 
 (defn update-app-state
   [app-state {:keys [index count] :as new-state}]
   (let [index (or index 0)
@@ -70,10 +69,10 @@
   (let [id (first ?data)
         body (second ?data)]
     (case id
-      :srv/sync (swap! app-state update-app-state body)
+      :srv/sync (swap! db update-app-state body)
       :srv/push (do
                   (timbre/debug event)
-                  (swap! app-state update-app-state body)))))
+                  (swap! db update-app-state body)))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -102,7 +101,7 @@
 (defn slide-prev
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
-  (let [{:keys [index]} @app-state]
+  (let [{:keys [index]} @db]
     (if-not (zero? index)
       (send-event :cli/prev {:index index :send-time (.getTime (js/Date.))}))))
 
@@ -110,7 +109,7 @@
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
   (let [out-of-bounds? (fn [idx c] (>= idx c))
-        {:keys [index count]} @app-state]
+        {:keys [index count]} @db]
     (if-not (out-of-bounds? index count)
       (send-event :cli/next {:index index :send-time (.getTime (js/Date.))}))))
 
@@ -140,7 +139,7 @@
 
 (defn get-slide []
   (let [prefix "slides/web-dev-dist-sys"
-        index (:index @app-state)
+        index (:index @db)
         extension ".png"]
     (str prefix index extension)))
 
