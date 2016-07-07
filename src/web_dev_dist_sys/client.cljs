@@ -36,11 +36,11 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
-(defn update-app-state
-  [app-state {:keys [index count] :as new-state}]
+(defn update-db
+  [state {:keys [index count] :as new-state}]
   (let [index (or index 0)
         count (or count 1)]
-    (assoc app-state
+    (assoc state
            :index index
            :count count)))
 
@@ -69,10 +69,10 @@
   (let [id (first ?data)
         body (second ?data)]
     (case id
-      :srv/sync (swap! db update-app-state body)
+      :srv/sync (swap! db update-db body)
       :srv/push (do
                   (timbre/debug event)
-                  (swap! db update-app-state body)))))
+                  (swap! db update-db body)))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
