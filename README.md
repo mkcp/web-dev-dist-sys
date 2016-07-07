@@ -15,6 +15,8 @@ Clients are designed to immediately override their local index replica with the 
 
 The server is available to receive and affect index events from clients regardless of when a tick happens. Events are taken in order off of sente's event queue and applied to the server's index.
 
+## Known Bugs
+Clients can get in some kind of desynchronized state where the server has a UUID for it, but does not accept their inputs or send them broadcasts. I need to look deeper into client sessions and sente's `connected-uids`.
 ## Setup
 
 To run with cider:
