@@ -97,12 +97,10 @@
   (assoc state :index (inc index)))
 
 ;; Event handlers
-(defmulti -event-msg-handler
-  "Multimethod to handle Sente `event-msg`s"
-  :id)
+(defmulti -event-msg-handler :id)
 
 (defn event-msg-handler
-  "Wraps `-event-msg-handler` with logging, error catching, etc."
+  "Wraps `-event-msg-handler` with logging."
   [{:as ev-msg :keys [event ring-req]}]
   (let [session (:session ring-req)
         uid (:client-id ring-req)]
@@ -158,9 +156,8 @@
   (let [c @heartbeat_]
     (when c (close! c))))
 
-(defn start-heartbeat!
-  "Every second, sends out of "
-  []
+(defn start-heartbeat! []
+  (timbre/info "Starting heartbeat broadcasts.")
   (reset! heartbeat_
           (go-loop [i 0]
             (<! (async/timeout 1000))
@@ -170,17 +167,20 @@
 (defn stop-watcher!
   "Removes watch from index"
   []
+  (timbre/info "Stopping app-state watcher.")
   (remove-watch db :index))
 
 (defn start-watcher!
   "Watches index for changes and broadcasts new state to all clients."
   []
+  (timbre/info "Starting app-state watcher.")
   (add-watch db :index push-client))
 
 (defonce web-server_ (atom nil))
 
 (defn stop-web-server! []
   (when-let [m @web-server_]
+    (timbre/info "Stopping web server.")
     ((:stop-fn m))))
 
 (defn start-selected-web-server!
