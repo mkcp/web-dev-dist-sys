@@ -8,13 +8,16 @@ This is meant to be used on a private network. There are no security features of
 
 Slides live in /resources/public/slides
 
-Client and server each have their own src files.
+Client and server are simple enough to each have their own single source file.
 
-Server broadcasts the slide index to all clients every second. (= tick 1000ms)
-Clients update their current slide based on this sync broadcast.
+The mechanisms for keeping clients in sync are: 
 
-Within these ticks, the server can receive events for the next broadcast.
-The 
+#### Watcher
+When a client submits a prev/next event, the server's index gets updated. After a transaction completes on the server's index, a watcher on the server's atom fires a function to broadcast the new index value to all clients.
+
+#### Heartbeat
+Networks are unreliable and drop messages, so the simplest way to correct clients' index drifting from missed watch broadcasts is for the server to broadcast the slide index to all clients each second. (= tick 1000ms)
+Clients update their local slide index based on this heartbeat, and if there is no difference there is no change. This prevents corrects drift from dropped watch updates.
 
 ## Setup
 
