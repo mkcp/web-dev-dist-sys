@@ -1,5 +1,5 @@
 (ns web-dev-dist-sys.server
-  "Server for the talk Wev Development Is Distributed Systems Programming."
+  "Server for the talk Web Development Is Distributed Systems Programming."
   (:require
    [clojure.string     :as str]
    [ring.middleware.defaults :as ring-defaults]
