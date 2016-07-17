@@ -9,14 +9,15 @@
 
 
 ;; TODO Add a socket-closed state.
+(defn now [] (.getTime (js/Date.)))
 
 ;; Dev tooling
 (enable-console-print!)
-(timbre/debugf "Client is running at %s" (.getTime (js/Date.)))
+(timbre/debugf "Client is running at %s" (now))
 
 ;; Database, init with some scratch vals.
 (defonce db (atom {:index 0
-                   :count 0}))
+                   :max 0}))
 
 ;; Channel socket setup
 (defn make-chsk-client
@@ -37,12 +38,12 @@
     ))
 
 (defn update-db
-  [state {:keys [index count] :as new-state}]
+  [state {:keys [index max] :as new-state}]
   (let [index (or index 0)
-        count (or count 1)]
+        max (or max 1)]
     (assoc state
            :index index
-           :count count)))
+           :max max)))
 
 ;;;; Sente event handlers
 (defmulti -event-msg-handler :id)
@@ -56,23 +57,19 @@
 (defmethod -event-msg-handler :chsk/state
   [{:as ev-msg :keys [?data]}]
   (if (= ?data {:first-open? true})
-    (timbre/debugf "Channel socket successfully established!")
-    (timbre/debugf "Channel socket state change: %s" ?data)))
+    (timbre/debugf "Channel socket successfully established!")))
 
 (defmethod -event-msg-handler :chsk/handshake
   [{:as ev-msg :keys [?data]}]
-  (let [[?uid ?csrf-token ?handshake-data] ?data]
-    (timbre/debugf "Handshake: %s" ?data)))
+  ;; TODO Get the db state on client startup.
+  )
 
 (defmethod -event-msg-handler :chsk/recv
   [{:as ev-msg :keys [event ?data]}]
-  (let [id (first ?data)
-        body (second ?data)]
+  (let [[id body] ?data]
     (case id
       :srv/sync (swap! db update-db body)
-      :srv/push (do
-                  (timbre/debug event)
-                  (swap! db update-db body)))))
+      :srv/push (swap! db update-db body))))
 
 (defmethod -event-msg-handler
   :default ; Default/fallback case (no other matching handler)
@@ -103,15 +100,14 @@
   []
   (let [{:keys [index]} @db]
     (if-not (zero? index)
-      (send-event :cli/prev {:index index :send-time (.getTime (js/Date.))}))))
+      (send-event :cli/prev {:index index :send-time (now)}))))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
-  (let [out-of-bounds? (fn [idx c] (>= idx c))
-        {:keys [index count]} @db]
-    (if-not (out-of-bounds? index count)
-      (send-event :cli/next {:index index :send-time (.getTime (js/Date.))}))))
+  (let [{:keys [index max]} @db]
+    (if-not (>= index max)
+      (send-event :cli/next {:index index :send-time (now)}))))
 
 ;; Input handling
 (def input-prev #{40 37})
@@ -123,15 +119,14 @@
   (let [key-code (.-keyCode e)]
     (cond
       (input-prev key-code) (slide-prev)
-      (input-next key-code) (slide-next)
-      :else :noop)))
+      (input-next key-code) (slide-next))))
 
 (defn listen-keyboard []
   (events/listen js/window "keydown" handle-keyboard))
 
 (defn start! [] (start-router!))
 
-;; FIXME Maybe?
+;; Run these functions once on startup.
 (defonce _start-once
   (do
     (listen-keyboard)
@@ -152,4 +147,4 @@
     [:img#slide.noselect {:src (get-slide)}]]])
 
 (r/render-component [layout]
-                    (. js/document (getElementById "app")))
+                    (.getElementById js/document "app"))

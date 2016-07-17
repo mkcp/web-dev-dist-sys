@@ -9,8 +9,10 @@
                  [org.clojure/clojurescript "1.7.228"]
                  [org.clojure/core.async "0.2.374"
                   :exclusions [org.clojure/tools.reader]]
+                 [org.clojure/test.check "0.9.0"]
                  [com.taoensso/sente "1.8.1"]
                  [com.taoensso/timbre "4.3.1"]
+                 [com.stuartsierra/component "0.3.1"]
                  [http-kit "2.2.0-alpha1"]
                  [ring "1.4.0"]
                  [ring/ring-defaults "0.2.0"]
