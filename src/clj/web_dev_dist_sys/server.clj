@@ -177,7 +177,7 @@
 (defn new-http-server [port]
   (map->HttpServer {:port port}))
 
-(defrecord Heartbeat [chsk-server stop-fn]
+(defrecord Heartbeat [chsk-server interval stop-fn]
   component/Lifecycle
   (start [this]
     (if-not stop-fn
@@ -185,7 +185,7 @@
             ch-ctrl (chan)]
 
         (go-loop [term 0]
-          (let [ch-timeout (async/timeout 1000)
+          (let [ch-timeout (async/timeout interval)
                 [_ port] (async/alts! [ch-timeout ch-ctrl])
                 stop? (= port ch-ctrl)]
 
@@ -205,7 +205,7 @@
       this)))
 
 (defn new-heartbeat []
-  (map->Heartbeat {}))
+  (map->Heartbeat {:interval 1000}))
 
 (defrecord Watcher [chsk-server]
   component/Lifecycle
