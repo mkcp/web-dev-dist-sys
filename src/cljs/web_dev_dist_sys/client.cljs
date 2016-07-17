@@ -61,8 +61,7 @@
 
 (defmethod -event-msg-handler :chsk/handshake
   [{:as ev-msg :keys [?data]}]
-  ;; TODO Get the db state on client startup.
-  )
+  (swap! db update-db (last ?data)))
 
 (defmethod -event-msg-handler :chsk/recv
   [{:as ev-msg :keys [event ?data]}]

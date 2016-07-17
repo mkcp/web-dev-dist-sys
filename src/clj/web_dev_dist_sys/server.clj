@@ -128,10 +128,16 @@
     (timbre/info "Starting channel-socket server.")
     (let [server (sente/make-channel-socket-server! sente-web-server-adapter
                                                     {:packer :edn
-                                                     :user-id-fn user-id-fn})
+                                                     :user-id-fn user-id-fn
+                                                     :handshake-data-fn (fn [ring-req] @db)})
           router (sente/start-server-chsk-router! (:ch-recv server) event-msg-handler)]
-      (assoc this :stop-fn router)
-      (merge this server)))
+      (assoc this
+             :ch-recv (:ch-recv server)
+             :send-fn (:send-fn server)
+             :ajax-post-fn (:ajax-post-fn server)
+             :ajax-get-or-ws-handshake-fn (:ajax-get-or-ws-handshake-fn server)
+             :connected-uids (:connected-uids server)
+             :stop-fn router)))
 
   (stop [this]
     (if stop-fn
