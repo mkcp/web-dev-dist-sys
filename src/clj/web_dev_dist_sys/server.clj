@@ -88,6 +88,8 @@
 (defmethod -event-msg-handler :cli/next [_]
   (swap! db (fn [state] (update-in state [:index] inc))))
 
+(defmethod -event-msg-handler :chsk/ws-ping [_] (comment "Noop"))
+
 ; Default/fallback case (no other matching handler)
 (defmethod -event-msg-handler :default
   [{:as ev-msg :keys [event id ?data ring-req ?reply-fn send-fn]}]
