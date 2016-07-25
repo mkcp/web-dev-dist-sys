@@ -18,7 +18,8 @@
                  [ring/ring-defaults "0.2.0"]
                  [compojure "1.5.0"]
                  [hiccup "1.0.5"]
-                 [reagent "0.5.1"]]
+                 [reagent "0.5.1"]
+                 [prismatic/schema "1.1.3"]]
 
   :plugins [[lein-figwheel "0.5.2"]
             [lein-cljsbuild "1.1.3" :exclusions [[org.clojure/clojure]]]]
