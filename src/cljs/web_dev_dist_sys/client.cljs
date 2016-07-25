@@ -7,7 +7,6 @@
             [taoensso.sente  :as sente  :refer [cb-success?]]
             [reagent.core :as r :refer [atom]]))
 
-
 ;; TODO Add a socket-closed state.
 (defn now [] (.getTime (js/Date.)))
 
@@ -37,6 +36,7 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
+;; TODO Add a schema check for update-db
 (defn update-db
   [state {:keys [index max] :as new-state}]
   (let [index (or index 0)
@@ -61,7 +61,7 @@
 
 (defmethod -event-msg-handler :chsk/handshake
   [{:as ev-msg :keys [?data]}]
-  (swap! db update-db (last ?data)))
+  (swap! db update-db (nth ?data 2)))
 
 (defmethod -event-msg-handler :chsk/recv
   [{:as ev-msg :keys [event ?data]}]
