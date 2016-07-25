@@ -125,12 +125,6 @@
 
 (defn start! [] (start-router!))
 
-;; Run these functions once on startup.
-(defonce _start-once
-  (do
-    (listen-keyboard)
-    (start!)))
-
 (defn get-slide []
   (let [prefix "slides/web-dev-dist-sys"
         index (:index @db)
@@ -144,6 +138,12 @@
     [:div.click-right {:on-click slide-next}]]
    [:div.slide-container
     [:img#slide.noselect {:src (get-slide)}]]])
+
+;; Run these functions once on startup.
+(defonce _start-once
+  (do
+    (listen-keyboard)
+    (start!)))
 
 (r/render-component [layout]
                     (.getElementById js/document "app"))
