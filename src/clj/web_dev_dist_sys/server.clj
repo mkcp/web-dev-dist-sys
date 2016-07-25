@@ -213,15 +213,17 @@
 (defn new-heartbeat []
   (map->Heartbeat {:interval 1000}))
 
-(defrecord Watcher [chsk-server]
+(defrecord Watcher [chsk-server active]
   component/Lifecycle
   (start [this]
     (timbre/info "Adding watcher for db updates")
-    (add-watch db :index (partial push-client chsk-server)))
+    (add-watch db :index (partial push-client chsk-server))
+    (assoc this :active [:index]))
 
   (stop [this]
     (timbre/info "Removing db watcher")
-    (remove-watch db :index)))
+    (remove-watch db :index)
+    (assoc this :active [])))
 
 (defn new-watcher []
   (map->Watcher {}))
@@ -234,9 +236,11 @@
       :http-server (component/using
                     (new-http-server port)
                     [:chsk-server])
+
       :watcher (component/using
                 (new-watcher)
                 [:chsk-server])
+
       :heartbeat (component/using
                   (new-heartbeat)
                   [:chsk-server])})))
