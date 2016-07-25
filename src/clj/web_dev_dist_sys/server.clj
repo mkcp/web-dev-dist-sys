@@ -19,12 +19,12 @@
 
 
 ;; Set the global logging behavior for timbre
-(timbre/set-config! {:level :debug
+(timbre/set-config! {:level :info
                      :appenders {:rotor (rotor/rotor-appender {:max-size (* 1024 1024)
                                                                :backlog 10
                                                                :path "./web-dev-dist-sys.log"})}})
 
-(defn get-max-index
+(defn get-and-count-max-index
   "Counts the number of slides in the folder and decs to 0-index."
   []
   (let [slides (->> (clojure.java.io/file "./resources/public/slides/")
@@ -33,20 +33,19 @@
                     (filter #(re-find #"^web" %)))]
     (dec (count slides))))
 
-;; Our server's state. This might be moved to a database record later on and passed into the ring request.
 (def db (atom {:index 0
-               :max (get-max-index)
-               :log []}))
+               :max (get-and-count-max-index)}))
+
+(def log (atom []))
 
 (defn append-entry
   "Not used for much just yet, but this function adds to this server's log.
   There's no log compaction, so be reasonably careful."
   [entry]
-  (let [new-log (conj (:log @db) entry)]
-    (swap! db assoc :log new-log)))
+  (swap! log conj entry))
 
 (defn user-id-fn
-  "Each client provides a UUID on connect, so we grab it from the request."
+  "Each client provides a UUID on connect. We get it from the request and call it the uid on our end."
   [ring-req]
   (:client-id ring-req))
 
@@ -69,7 +68,6 @@
    (GET  "/chsk"  ring-req (ring-ajax-get-or-ws-handshake ring-req))
    (route/resources "/") ; Static files, notably public/main.js (our cljs target)
    (route/not-found "<h1>Route not found, 404 :C</h1>")))
-
 
 ;; Event handlers
 
