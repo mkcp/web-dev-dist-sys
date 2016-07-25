@@ -252,12 +252,13 @@
    #'system-state
    component/start))
 
-(defn cider-stop! []
+(defn stop []
   (alter-var-root
    #'system-state
-   (fn [system]
-     (when system
-       (component/stop system)))))
+   component/stop-system))
+
+(defn cider-stop! []
+  (stop))
 
 (defn cider-start! []
   (init)
