@@ -114,7 +114,8 @@
   (let [uids @connected-uids]
     (doseq [uid (:any uids)]
       (timbre/debug "Pushing: " new-state " to UID: " uid)
-      (send-fn uid [:srv/push new-state]))))
+      (send-fn uid [:srv/push (assoc new-state
+                                     :time (System/currentTimeMillis))]))))
 
 (defrecord ChskServer [ch-recv
                        send-fn
