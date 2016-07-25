@@ -99,20 +99,21 @@
 
 (defn sync-client
   [{:keys [send-fn connected-uids]} term]
-  (let [{:keys [index max]} @db
+  (timbre/info "Sending Heartbeat to all clients.")
+  (let [db @db
         uids @connected-uids]
     (doseq [uid (:any uids)]
-      (timbre/info "Heartbeat to:" uid)
-      (send-fn uid [:srv/sync {:index index
-                               :max max
-                               :term term
-                               :time (System/currentTimeMillis)}]))))
+      (timbre/debug "Syncing: " db " to UID: " uid)
+      (send-fn uid [:srv/sync (assoc db
+                                     :term term
+                                     :time (System/currentTimeMillis))]))))
 
 (defn push-client
   [{:keys [send-fn connected-uids]} _ _ _ new-state]
+  (timbre/info "Pushing state to all clients.")
   (let [uids @connected-uids]
     (doseq [uid (:any uids)]
-      (timbre/info "Pushing state to: " uid)
+      (timbre/debug "Pushing: " new-state " to UID: " uid)
       (send-fn uid [:srv/push new-state]))))
 
 (defrecord ChskServer [ch-recv
@@ -127,7 +128,7 @@
     (let [server (sente/make-channel-socket-server! sente-web-server-adapter
                                                     {:packer :edn
                                                      :user-id-fn user-id-fn
-                                                     :handshake-data-fn (fn [ring-req] @db)})
+                                                     :handshake-data-fn (fn [_] @db)})
           router (sente/start-server-chsk-router! (:ch-recv server) event-msg-handler)]
       (assoc this
              :ch-recv (:ch-recv server)
