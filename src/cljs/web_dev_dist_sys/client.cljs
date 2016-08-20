@@ -1,13 +1,14 @@
 (ns web-dev-dist-sys.client
   (:require [clojure.string :as str]
+            [schema.core :as s :include-macros true]
             [goog.events :as events]
-            [goog.events.KeyCodes :as KeyCodes]
             [taoensso.encore :as encore]
             [taoensso.timbre :as timbre :refer-macros [tracef debugf infof warnf errorf]]
-            [taoensso.sente  :as sente  :refer [cb-success?]]
+            [taoensso.sente  :as sente]
             [reagent.core :as r :refer [atom]]))
 
 ;; TODO Add a socket-closed state.
+;; TODO Add a latency tracker between client and server?
 (defn now [] (.getTime (js/Date.)))
 
 ;; Dev tooling
@@ -99,14 +100,14 @@
   []
   (let [{:keys [index]} @db]
     (if-not (zero? index)
-      (send-event :cli/prev {:index index :send-time (now)}))))
+      (send-event :cli/prev {:index index :time (now)}))))
 
 (defn slide-next
   "Send next event to server. Either commit change locally on correct response, or sync w/ heartbeat."
   []
   (let [{:keys [index max]} @db]
     (if-not (>= index max)
-      (send-event :cli/next {:index index :send-time (now)}))))
+      (send-event :cli/next {:index index :time (now)}))))
 
 ;; Input handling
 (def input-prev #{40 37})

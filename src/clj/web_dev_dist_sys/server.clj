@@ -36,14 +36,6 @@
 (def db (atom {:index 0
                :max (get-and-count-max-index)}))
 
-(def log (atom []))
-
-(defn append-entry
-  "Not used for much just yet, but this function adds to this server's log.
-  There's no log compaction, so be reasonably careful."
-  [entry]
-  (swap! log conj entry))
-
 (defn user-id-fn
   "Each client provides a UUID on connect. We get it from the request and call it the uid on our end."
   [ring-req]
@@ -102,11 +94,11 @@
   (timbre/info "Sending Heartbeat to all clients.")
   (let [db @db
         uids @connected-uids]
-    (doseq [uid (:any uids)]
-      (timbre/debug "Syncing: " db " to UID: " uid)
-      (send-fn uid [:srv/sync (assoc db
-                                     :term term
-                                     :time (System/currentTimeMillis))]))))
+    (when uids
+      (doseq [uid (:any uids)]
+        (timbre/debug "Syncing: " db " to UID: " uid)
+        (send-fn uid [:srv/sync (assoc db
+                                       :term term)])))))
 
 (defn push-client
   [{:keys [send-fn connected-uids]} _ _ _ new-state]
@@ -114,8 +106,7 @@
   (let [uids @connected-uids]
     (doseq [uid (:any uids)]
       (timbre/debug "Pushing: " new-state " to UID: " uid)
-      (send-fn uid [:srv/push (assoc new-state
-                                     :time (System/currentTimeMillis))]))))
+      (send-fn uid [:srv/push new-state]))))
 
 (defrecord ChskServer [ch-recv
                        send-fn
