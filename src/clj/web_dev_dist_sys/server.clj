@@ -69,7 +69,7 @@
   "Wraps `-event-msg-handler` with logging."
   [{:as ev-msg :keys [event ring-req client-id]}]
   (let [session (:session ring-req)]
-    (timbre/info (str "UID: " client-id " Event:" event))
+    (timbre/info {:uid client-id :event event})
     (-event-msg-handler ev-msg)))
 
 (defmethod -event-msg-handler :cli/prev [_]
@@ -91,21 +91,29 @@
 
 (defn sync-client
   [{:keys [send-fn connected-uids]} term]
-  (timbre/info "Sending Heartbeat to all clients.")
+  (timbre/info {:event :sync-clients
+                :message "Sending sync to all clients."})
   (let [db @db
         uids @connected-uids]
     (when uids
       (doseq [uid (:any uids)]
-        (timbre/debug "Syncing: " db " to UID: " uid)
+        (timbre/debug {:uid uid
+                       :db db
+                       :event :sync-client
+                       :message (str "Syncing: " db " to UID: " uid)})
         (send-fn uid [:srv/sync (assoc db
                                        :term term)])))))
 
 (defn push-client
   [{:keys [send-fn connected-uids]} _ _ _ new-state]
-  (timbre/info "Pushing state to all clients.")
+  (timbre/info {:event :push-clients
+                :message "Pushing state to all clients."})
   (let [uids @connected-uids]
     (doseq [uid (:any uids)]
-      (timbre/debug "Pushing: " new-state " to UID: " uid)
+      (timbre/debug {:uid uid
+                     :new-state new-state
+                     :event :push-client
+                     :message (str "Pushing: " new-state " to UID: " uid)})
       (send-fn uid [:srv/push new-state]))))
 
 (defrecord ChskServer [ch-recv
@@ -116,7 +124,9 @@
                        stop-fn]
   component/Lifecycle
   (start [this]
-    (timbre/info "Starting channel-socket server.")
+    (timbre/info {:component 'ChskServer
+                  :state :started
+                  :message "Starting channel-socket server."})
     (let [server (sente/make-channel-socket-server! sente-web-server-adapter
                                                     {:packer :edn
                                                      :user-id-fn user-id-fn
@@ -133,7 +143,9 @@
   (stop [this]
     (if stop-fn
       (do
-        (timbre/info "Stoppping WS server.")
+        (timbre/info {:component 'ChskServer
+                      :state :stopped
+                      :message "Stoppping WS server."})
         (stop-fn)
         (assoc this
                :ch-recv nil
@@ -149,7 +161,9 @@
   component/Lifecycle
   (start [this]
     (if-not stop-fn
-      (let [_ (timbre/infof "Starting presentation server.")
+      (let [_ (timbre/info {:component 'HttpServer
+                             :state :started
+                             :message "Starting presentation server."})
             chsk-handshake (:ajax-get-or-ws-handshake-fn chsk-server)
             ring-handler (ring-defaults/wrap-defaults (ring-routes chsk-handshake)
                                                       ring-defaults/site-defaults)
@@ -159,7 +173,7 @@
                           :stop-fn (fn [] (stop-fn :timeout 100))})
 
             uri (format "http://localhost:%s/" port)]
-        (timbre/infof "Web server is running at `%s`" uri)
+        (timbre/info "Web server is running at `%s`" uri)
 
         (assoc this :stop-fn (:stop-fn server-map)))
       this))
@@ -167,7 +181,9 @@
   (stop [this]
     (if stop-fn
       (do
-        (timbre/info "Stopping HTTP server.")
+        (timbre/info {:component 'HttpServer
+                       :state :stopped
+                       :message "Stopping HTTP server."})
         (stop-fn))
       this)))
 
@@ -178,7 +194,9 @@
   component/Lifecycle
   (start [this]
     (if-not stop-fn
-      (let [_ (timbre/info "Starting heartbeat broadcasts.")
+      (let [_ (timbre/info {:component 'HeartBeat
+                            :state :started
+                            :message "Starting heartbeat broadcasts."})
             ch-ctrl (chan)]
 
         (go-loop [term 0]
@@ -197,7 +215,9 @@
   (stop [this]
     (if stop-fn
       (do
-        (timbre/info "Stopping Heartbeat.")
+        (timbre/info {:component 'HeartBeat
+                      :state :stopped
+                      :message "Stopping heartbeats."})
         (stop-fn))
       this)))
 
@@ -207,12 +227,16 @@
 (defrecord Watcher [chsk-server active]
   component/Lifecycle
   (start [this]
-    (timbre/info "Adding watcher for db updates")
+    (timbre/info {:component 'Watcher
+                  :state :started
+                  :message "Adding watcher for db updates"})
     (add-watch db :index (partial push-client chsk-server))
     (assoc this :active [:index]))
 
   (stop [this]
-    (timbre/info "Removing db watcher")
+    (timbre/info {:component 'Watcher
+                  :state :stopped
+                  :message "Removing db watcher"})
     (remove-watch db :index)
     (assoc this :active [])))
 
